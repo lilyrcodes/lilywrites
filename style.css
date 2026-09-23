@@ -7,6 +7,7 @@ html {
 	position: fixed;
 	top: 0px !important;
 	left: 0px !important;
+	background-color: #fdfdfd;
 }
 
 body {
@@ -237,6 +238,10 @@ ul.task-list li input[type="checkbox"] {
 	/* Dark theme styles go here */
 	html {
 		color: #fdfdfd;
+		background-color: #1a1a1a;
+	}
+
+	#homelink {
 		background-color: #1a1a1a;
 	}
 
