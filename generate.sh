@@ -26,7 +26,11 @@ function convert() {
     local output_fname="${lower_title// /_}.html"
     stderr "Writing html to ${output_fname}"
     echo "* [${title}](./${output_fname})" >> "${index_file}"
-    pandoc -s -f markdown -t html5 -o "${output_fname}" --css style.css -B header.txt --metadata title="${title}" "${path}"
+    pandoc -s -f markdown -t html5 -o "output/${output_fname}" \
+        --css style.css \
+        --template resources/template.html \
+        -B resources/header.html \
+        "${path}"
 }
 
 if ! command -v pandoc >/dev/null 2>&1
@@ -44,7 +48,11 @@ input_dir="${1}"
 index_title="${2}"
 index_file="$(mktemp)"
 trap "rm -f ${index_file}" EXIT
-stderr "${index_file}"
+stderr "Using temp index file: ${index_file}"
+
+stderr "Copying stylesheet to output dir..."
+mkdir -p output
+cp resources/style.css output/style.css
 
 for path in $input_dir/*.md ; do
     convert "${path}" "${index_file}"
@@ -55,4 +63,4 @@ stderr "Generated index markdown file:"
 >&2 cat "${index_file}"
 stderr ""
 
-pandoc -s -f markdown -t html5 -o "index.html" --css style.css --metadata title="${index_title}" "${index_file}"
+pandoc -s -f markdown -t html5 -o "output/index.html" --css style.css --metadata title="${index_title}" "${index_file}"
