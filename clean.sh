@@ -1,3 +1,3 @@
 #!/bin/bash
 
-rm *.html
+rm -rf output
