@@ -29,7 +29,6 @@ function convert() {
     pandoc -s -f markdown -t html5 -o "output/${output_fname}" \
         --css style.css \
         --template resources/template.html \
-        -B resources/header.html \
         "${path}"
 }
 
