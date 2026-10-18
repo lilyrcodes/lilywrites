@@ -8,8 +8,10 @@
 # /usr/bin/python3
 
 import argparse
+import pandoc
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from pandoc.types import *
 from io import FileIO
 
 
@@ -18,7 +20,10 @@ def convert_file(input_path: Path, output_path: Path):
 
 
 def extract_metadata_date(input_path: Path) -> str:
-    pass
+    doc: Pandoc = pandoc.read(input_path.read_text())
+    meta: dict[Text, MetaValue] = doc[0][0]
+    date = meta['date'][0]
+    return pandoc.write(date).strip()
 
 
 def write_index_file(
@@ -56,7 +61,7 @@ def parse_and_validate_args() -> argparse.Namespace:
 
 def main():
     args = parse_and_validate_args()
-    with NamedTemporaryFile(mode='rw') as index_md_file:
+    with NamedTemporaryFile(mode='w') as index_md_file:
         convert_dir(args.markdown_dir, args.output_dir, index_md_file)
 
 
