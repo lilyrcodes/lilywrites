@@ -7,7 +7,9 @@ authors = [
     { name = "Lily Richards", email = "lilymichellerichards@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pandoc>=2.4",
+]
 
 [project.scripts]
 lilywrites = "lilywrites:main"

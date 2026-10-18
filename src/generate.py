@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "pandoc>=2.4",
+# ]
+# ///
+
 # /usr/bin/python3
 
 import argparse
