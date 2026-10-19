@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Lily Richards", email = "lilymichellerichards@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "pandoc>=2.4",
 ]

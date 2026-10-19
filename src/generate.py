@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.12"
+# requires-python = ">=3.14"
 # dependencies = [
 #     "pandoc>=2.4",
 # ]
@@ -16,8 +16,23 @@ from pandoc.types import MetaValue, Pandoc, Text
 from io import FileIO
 
 
-def convert_file(input_path: Path, output_path: Path):
-    pass
+def convert_file(
+        input_path: Path,
+        output_path: Path,
+        use_template: bool = True):
+    pandoc_options = [
+        '-s',
+        '--css',
+        'style.css',
+    ]
+    if use_template:
+        pandoc_options += [
+            '--template',
+            'resources/template.html',
+        ]
+    doc = pandoc.read(file=str(input_path), format='markdown')
+    pandoc.write(doc, file=str(output_path),
+                 format='html5', options=pandoc_options)
 
 
 def extract_metadata_date(input_path: Path) -> str:
@@ -36,17 +51,20 @@ def write_index_file(
         date_map) for path in date_map[date]]
     lines: list[str] = ['---', f'title: {title}', '---']
     for path in paths:
-        lines.append(f'* [{path.stem}]({get_output_fname(path.name)})')
-    for line in lines:
-        print(line)
-    pass
+        lines.append(f'* [{path.stem}](./{get_output_fname(path.name)})')
+    index_md_file.write('\n'.join(lines))
+    index_md_file.flush()
 
 
 def get_output_fname(input_fname: str) -> str:
     return input_fname.lower().replace(' ', '_').replace('.md', '.html')
 
 
-def convert_dir(markdown_dir: Path, output_dir: Path, index_md_file: FileIO, title: str):
+def convert_dir(
+        markdown_dir: Path,
+        output_dir: Path,
+        index_md_file: FileIO,
+        title: str):
     date_map: dict[str, Path] = defaultdict(list)
     for dirpath, dirnames, filenames in markdown_dir.walk():
         for fname in filenames:
@@ -55,7 +73,9 @@ def convert_dir(markdown_dir: Path, output_dir: Path, index_md_file: FileIO, tit
             convert_file(input_path, output_dir / output_fname)
             date_map[extract_metadata_date(input_path)].append(input_path)
     write_index_file(index_md_file, date_map, output_dir, title)
-    convert_file(Path(index_md_file.name), output_dir / 'index.html')
+    convert_file(Path(index_md_file.name),
+                 output_dir / 'index.html',
+                 use_template=False)
 
 
 def parse_and_validate_args() -> argparse.Namespace:
@@ -73,11 +93,16 @@ def parse_and_validate_args() -> argparse.Namespace:
     return args
 
 
+def copy_stylesheet(output_dir: Path):
+    Path('resources/style.css').copy_into(output_dir)
+
+
 def main():
     args = parse_and_validate_args()
     with NamedTemporaryFile(mode='w') as index_md_file:
         convert_dir(args.markdown_dir, args.output_dir,
                     index_md_file, args.title)
+    copy_stylesheet(args.output_dir)
 
 
 if __name__ == '__main__':
