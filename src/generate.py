@@ -15,6 +15,7 @@ from collections import defaultdict
 from feedgen.feed import FeedGenerator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Optional
 from pandoc.types import MetaValue, Pandoc, Text
 from io import FileIO
 
@@ -22,7 +23,8 @@ from io import FileIO
 def convert_file(
         input_path: Path,
         output_path: Path,
-        use_template: bool = True):
+        use_template: bool = True,
+        link_rss_feed: bool = False):
     pandoc_options = [
         '-s',
         '--css',
@@ -33,9 +35,39 @@ def convert_file(
             '--template',
             'resources/template.html',
         ]
-    doc = pandoc.read(file=str(input_path), format='markdown')
-    pandoc.write(doc, file=str(output_path),
-                 format='html5', options=pandoc_options)
+    rss_head: Optional[NamedTemporaryFile] = None
+    rss_body: Optional[NamedTemporaryFile] = None
+    try:
+        if link_rss_feed:
+            rss_head = NamedTemporaryFile(mode='w')
+            rss_head.write(
+                '<link rel="alternate" '
+                'type="application/rss+xml" '
+                'title="RSS Feed" '
+                'href="rss.xml">\n')
+            rss_body = NamedTemporaryFile(mode='w')
+            rss_body.write(
+                '<div id="rsslink">'
+                '<a href="rss.xml" '
+                'title="View RSS Feed" '
+                'aria-label="View RSS Feed">'
+                '🛜</a></div> \n')
+            rss_head.flush()
+            rss_body.flush()
+            pandoc_options += [
+                '--include-in-header',
+                rss_head.name,
+                '--include-after-body',
+                rss_body.name,
+            ]
+        doc = pandoc.read(file=str(input_path), format='markdown')
+        pandoc.write(doc, file=str(output_path),
+                     format='html5', options=pandoc_options)
+    finally:
+        if rss_body:
+            rss_body.close()
+        if rss_head:
+            rss_head.close()
 
 
 def extract_metadata_date(input_path: Path) -> str:
@@ -100,7 +132,8 @@ def convert_dir(
         markdown_dir: Path,
         output_dir: Path,
         index_md_file: FileIO,
-        title: str):
+        title: str,
+        link_rss_feed: bool):
     date_map = get_date_map(markdown_dir)
     for dirpath, dirnames, filenames in markdown_dir.walk():
         for fname in filenames:
@@ -110,7 +143,7 @@ def convert_dir(
     write_index_file(index_md_file, date_map, output_dir, title)
     convert_file(Path(index_md_file.name),
                  output_dir / 'index.html',
-                 use_template=False)
+                 use_template=False, link_rss_feed=link_rss_feed)
 
 
 def parse_and_validate_args() -> argparse.Namespace:
@@ -137,7 +170,7 @@ def main():
     args = parse_and_validate_args()
     with NamedTemporaryFile(mode='w') as index_md_file:
         convert_dir(args.markdown_dir, args.output_dir,
-                    index_md_file, args.title)
+                    index_md_file, args.title, bool(args.rss_url_root))
     copy_stylesheet(args.output_dir)
     if args.rss_url_root:
         write_rss_feed(args.markdown_dir, args.output_dir,
