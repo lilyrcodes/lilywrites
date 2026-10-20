@@ -1,6 +1,7 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
+#     "feedgen>=1.0.0",
 #     "pandoc>=2.4",
 # ]
 # ///
@@ -8,8 +9,10 @@
 # /usr/bin/python3
 
 import argparse
+import datetime
 import pandoc
 from collections import defaultdict
+from feedgen.feed import FeedGenerator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from pandoc.types import MetaValue, Pandoc, Text
@@ -56,8 +59,41 @@ def write_index_file(
     index_md_file.flush()
 
 
+def write_rss_feed(
+        markdown_dir: Path,
+        output_dir: Path,
+        title: str,
+        rss_url_root: str):
+    date_map = get_date_map(markdown_dir)
+    fg = FeedGenerator()
+    fg.title(title)
+    fg.link(href=f'{rss_url_root}/rss.xml', rel='self')
+    fg.description(title)
+    for date in sorted(date_map.keys()):
+        for path in date_map[date]:
+            entry = fg.add_entry()
+            d = datetime.date.fromisoformat(date)
+            dt = datetime.datetime(
+                d.year, d.month, d.day, 0, 0, 0, 0, datetime.timezone.utc)
+            url = f'{rss_url_root}/{get_output_fname(path.name)}'
+            entry.id(url)
+            entry.title(path.stem)
+            entry.pubdate(dt)
+            entry.link(href=url)
+    fg.rss_file(str(output_dir / 'rss.xml'))
+
+
 def get_output_fname(input_fname: str) -> str:
     return input_fname.lower().replace(' ', '_').replace('.md', '.html')
+
+
+def get_date_map(markdown_dir: Path) -> dict[str, [Path]]:
+    date_map: dict[str, [Path]] = defaultdict(list)
+    for dirpath, dirnames, filenames in markdown_dir.walk():
+        for fname in filenames:
+            input_path = dirpath / fname
+            date_map[extract_metadata_date(input_path)].append(input_path)
+    return date_map
 
 
 def convert_dir(
@@ -65,13 +101,12 @@ def convert_dir(
         output_dir: Path,
         index_md_file: FileIO,
         title: str):
-    date_map: dict[str, Path] = defaultdict(list)
+    date_map = get_date_map(markdown_dir)
     for dirpath, dirnames, filenames in markdown_dir.walk():
         for fname in filenames:
             output_fname = get_output_fname(fname)
             input_path = dirpath / fname
             convert_file(input_path, output_dir / output_fname)
-            date_map[extract_metadata_date(input_path)].append(input_path)
     write_index_file(index_md_file, date_map, output_dir, title)
     convert_file(Path(index_md_file.name),
                  output_dir / 'index.html',
@@ -84,6 +119,7 @@ def parse_and_validate_args() -> argparse.Namespace:
     parser.add_argument('-o', '--output_dir', type=Path, required=True)
     parser.add_argument('-t', '--title', type=str,
                         required=False, default="Home")
+    parser.add_argument('-u', '--rss_url_root', type=str, required=False)
     args = parser.parse_args()
     if not args.markdown_dir.is_dir():
         raise FileNotFoundError(f"Markdown directory {
@@ -103,6 +139,9 @@ def main():
         convert_dir(args.markdown_dir, args.output_dir,
                     index_md_file, args.title)
     copy_stylesheet(args.output_dir)
+    if args.rss_url_root:
+        write_rss_feed(args.markdown_dir, args.output_dir,
+                       args.title, args.rss_url_root)
 
 
 if __name__ == '__main__':
