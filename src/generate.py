@@ -12,17 +12,54 @@ import argparse
 import datetime
 import pandoc
 from collections import defaultdict
+from dataclasses import dataclass
 from feedgen.feed import FeedGenerator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Optional
+from typing import Optional, Self
 from pandoc.types import MetaValue, Pandoc, Text
 from io import FileIO
 
 
+@dataclass
+class DocumentMetadata:
+    input_path: Path
+    output_path: Path
+    title: str
+    pub_date: Optional[datetime.datetime]
+    summary: Optional[str]
+
+    @classmethod
+    def CreateFromPaths(cls, input_path: Path, output_dir: Path) -> Self:
+        doc: Pandoc = pandoc.read(input_path.read_text())
+        meta: dict[Text, MetaValue] = doc[0][0]
+        output_fname = get_output_fname(input_path.name)
+        pub_date_str: Optional[str] = None
+        if 'date' in meta:
+            pub_date_str = pandoc.write(meta['date'][0]).strip()
+        pub_date: Optional[datetime.datetime] = None
+        if pub_date_str is not None:
+            d = datetime.date.fromisoformat(pub_date_str)
+            pub_date = datetime.datetime(
+                d.year, d.month, d.day, 0, 0, 0, 0, datetime.timezone.utc)
+        title: str = ''
+        if 'title' in meta:
+            title = pandoc.write(meta['title'][0]).strip()
+        else:
+            title = input_path.stem
+        summary: Optional[str] = None
+        if 'summary' in meta:
+            summary = pandoc.write(meta['summary'][0]).strip()
+        return DocumentMetadata(
+            input_path=input_path,
+            output_path=output_dir / output_fname,
+            title=title,
+            pub_date=pub_date,
+            summary=summary)
+
+
 def convert_file(
-        input_path: Path,
-        output_path: Path,
+        doc: DocumentMetadata,
         use_template: bool = True,
         link_rss_feed: bool = False):
     pandoc_options = [
@@ -60,8 +97,8 @@ def convert_file(
                 '--include-after-body',
                 rss_body.name,
             ]
-        doc = pandoc.read(file=str(input_path), format='markdown')
-        pandoc.write(doc, file=str(output_path),
+        doc = pandoc.read(file=str(doc.input_path), format='markdown')
+        pandoc.write(doc, file=str(doc.output_path),
                      format='html5', options=pandoc_options)
     finally:
         if rss_body:
@@ -137,9 +174,9 @@ def convert_dir(
     date_map = get_date_map(markdown_dir)
     for dirpath, dirnames, filenames in markdown_dir.walk():
         for fname in filenames:
-            output_fname = get_output_fname(fname)
             input_path = dirpath / fname
-            convert_file(input_path, output_dir / output_fname)
+            doc = DocumentMetadata.CreateFromPaths(input_path, output_dir)
+            convert_file(doc)
     write_index_file(index_md_file, date_map, output_dir, title)
     convert_file(Path(index_md_file.name),
                  output_dir / 'index.html',
