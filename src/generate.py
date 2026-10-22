@@ -11,7 +11,6 @@
 import argparse
 import datetime
 import pandoc
-from collections import defaultdict
 from dataclasses import dataclass
 from feedgen.feed import FeedGenerator
 from pathlib import Path
@@ -33,7 +32,7 @@ class DocumentMetadata:
     def CreateFromPaths(cls, input_path: Path, output_dir: Path) -> Self:
         doc: Pandoc = pandoc.read(input_path.read_text())
         meta: dict[Text, MetaValue] = doc[0][0]
-        output_fname = get_output_fname(input_path.name)
+        output_fname = get_output_fname(input_path)
         pub_date_str: Optional[str] = None
         if 'date' in meta:
             pub_date_str = pandoc.write(meta['date'][0]).strip()
@@ -97,8 +96,8 @@ def convert_file(
                 '--include-after-body',
                 rss_body.name,
             ]
-        doc = pandoc.read(file=str(doc.input_path), format='markdown')
-        pandoc.write(doc, file=str(doc.output_path),
+        pdoc = pandoc.read(file=str(doc.input_path), format='markdown')
+        pandoc.write(pdoc, file=str(doc.output_path),
                      format='html5', options=pandoc_options)
     finally:
         if rss_body:
@@ -107,62 +106,52 @@ def convert_file(
             rss_head.close()
 
 
-def extract_metadata_date(input_path: Path) -> str:
-    doc: Pandoc = pandoc.read(input_path.read_text())
-    meta: dict[Text, MetaValue] = doc[0][0]
-    date = meta['date'][0]
-    return pandoc.write(date).strip()
-
-
 def write_index_file(
         index_md_file: FileIO,
-        date_map: dict[str, [Path]],
-        output_dir: Path,
+        documents: [DocumentMetadata],
         title: str):
-    paths: list[Path] = [path for date in sorted(
-        date_map) for path in date_map[date]]
     lines: list[str] = ['---', f'title: {title}', '---']
-    for path in paths:
-        lines.append(f'* [{path.stem}](./{get_output_fname(path.name)})')
+    for doc in documents:
+        lines.append(
+            f'* [{doc.input_path.stem}]'
+            f'(./{doc.output_path.name})')
     index_md_file.write('\n'.join(lines))
     index_md_file.flush()
 
 
 def write_rss_feed(
-        markdown_dir: Path,
+        documents: [DocumentMetadata],
         output_dir: Path,
         title: str,
         rss_url_root: str):
-    date_map = get_date_map(markdown_dir)
     fg = FeedGenerator()
     fg.title(title)
     fg.link(href=f'{rss_url_root}/rss.xml', rel='self')
     fg.description(title)
-    for date in sorted(date_map.keys()):
-        for path in date_map[date]:
-            entry = fg.add_entry()
-            d = datetime.date.fromisoformat(date)
-            dt = datetime.datetime(
-                d.year, d.month, d.day, 0, 0, 0, 0, datetime.timezone.utc)
-            url = f'{rss_url_root}/{get_output_fname(path.name)}'
-            entry.id(url)
-            entry.title(path.stem)
-            entry.pubdate(dt)
-            entry.link(href=url)
+    for doc in documents:
+        entry = fg.add_entry()
+        url = f'{rss_url_root}/{doc.output_path.name}'
+        entry.id(url)
+        if doc.title is not None:
+            entry.title(doc.title)
+        if doc.pub_date is not None:
+            entry.pubDate(doc.pub_date)
+        entry.link(href=url)
     fg.rss_file(str(output_dir / 'rss.xml'))
 
 
-def get_output_fname(input_fname: str) -> str:
-    return input_fname.lower().replace(' ', '_').replace('.md', '.html')
+def get_output_fname(input_path: Path) -> str:
+    return input_path.name.lower().replace(' ', '_').replace('.md', '.html')
 
 
-def get_date_map(markdown_dir: Path) -> dict[str, [Path]]:
-    date_map: dict[str, [Path]] = defaultdict(list)
+def get_documents(markdown_dir: Path, output_dir: Path) -> [DocumentMetadata]:
+    documents: [DocumentMetadata] = []
     for dirpath, dirnames, filenames in markdown_dir.walk():
         for fname in filenames:
             input_path = dirpath / fname
-            date_map[extract_metadata_date(input_path)].append(input_path)
-    return date_map
+            documents.append(
+                DocumentMetadata.CreateFromPaths(input_path, output_dir))
+    return sorted(documents, key=lambda d: d.pub_date)
 
 
 def convert_dir(
@@ -170,17 +159,25 @@ def convert_dir(
         output_dir: Path,
         index_md_file: FileIO,
         title: str,
-        link_rss_feed: bool):
-    date_map = get_date_map(markdown_dir)
-    for dirpath, dirnames, filenames in markdown_dir.walk():
-        for fname in filenames:
-            input_path = dirpath / fname
-            doc = DocumentMetadata.CreateFromPaths(input_path, output_dir)
-            convert_file(doc)
-    write_index_file(index_md_file, date_map, output_dir, title)
-    convert_file(Path(index_md_file.name),
-                 output_dir / 'index.html',
-                 use_template=False, link_rss_feed=link_rss_feed)
+        rss_url_root: Optional[str]):
+    documents = get_documents(markdown_dir, output_dir)
+    for doc in documents:
+        convert_file(doc)
+    write_index_file(index_md_file, documents, title)
+    index_md_path = Path(index_md_file.name)
+    index_doc = DocumentMetadata(
+        input_path=index_md_path,
+        output_path=output_dir / 'index.html',
+        title=title,
+        pub_date=None,
+        summary=None)
+    convert_file(
+        index_doc,
+        use_template=False,
+        link_rss_feed=bool(rss_url_root))
+    if rss_url_root:
+        write_rss_feed(
+            documents, output_dir, title, rss_url_root)
 
 
 def parse_and_validate_args() -> argparse.Namespace:
@@ -207,11 +204,8 @@ def main():
     args = parse_and_validate_args()
     with NamedTemporaryFile(mode='w') as index_md_file:
         convert_dir(args.markdown_dir, args.output_dir,
-                    index_md_file, args.title, bool(args.rss_url_root))
+                    index_md_file, args.title, args.rss_url_root)
     copy_stylesheet(args.output_dir)
-    if args.rss_url_root:
-        write_rss_feed(args.markdown_dir, args.output_dir,
-                       args.title, args.rss_url_root)
 
 
 if __name__ == '__main__':
