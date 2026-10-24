@@ -32,4 +32,8 @@ from those files to extract title, publication date, etc. If no metadata is
 present, it will use the document's filename as a title, and all other metadata
 will be considered missing.
 
+# Limitations
 
+* Currently doesn't support nested folders, as it only outputs to a flat directory
+* Does not account for name collisions when converting input filenames (outputs
+  are all snake_case and lowercase)
