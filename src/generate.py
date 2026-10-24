@@ -148,6 +148,8 @@ def get_documents(markdown_dir: Path, output_dir: Path) -> [DocumentMetadata]:
     documents: [DocumentMetadata] = []
     for dirpath, dirnames, filenames in markdown_dir.walk():
         for fname in filenames:
+            if not fname.endswith('.md'):
+                continue
             input_path = dirpath / fname
             documents.append(
                 DocumentMetadata.CreateFromPaths(input_path, output_dir))
