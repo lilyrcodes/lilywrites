@@ -56,54 +56,50 @@ class DocumentMetadata:
             pub_date=pub_date,
             summary=summary)
 
-
-def convert_file(
-        doc: DocumentMetadata,
-        use_template: bool = True,
-        link_rss_feed: bool = False):
-    pandoc_options = [
-        '-s',
-        '--css',
-        'style.css',
-    ]
-    if use_template:
-        pandoc_options += [
-            '--template',
-            'resources/template.html',
+    def convert(self, use_template: bool = True, link_rss_feed: bool = False):
+        pandoc_options = [
+            '-s',
+            '--css',
+            'style.css',
         ]
-    rss_head: Optional[NamedTemporaryFile] = None
-    rss_body: Optional[NamedTemporaryFile] = None
-    try:
-        if link_rss_feed:
-            rss_head = NamedTemporaryFile(mode='w')
-            rss_head.write(
-                '<link rel="alternate" '
-                'type="application/rss+xml" '
-                'title="RSS Feed" '
-                'href="rss.xml">\n')
-            rss_body = NamedTemporaryFile(mode='w')
-            rss_body.write(
-                '<div id="rsslink">'
-                '<a href="rss.xml" '
-                'title="View RSS Feed" '
-                'aria-label="View RSS Feed">'
-                '🛜</a></div> \n')
-            rss_head.flush()
-            rss_body.flush()
+        if use_template:
             pandoc_options += [
-                '--include-in-header',
-                rss_head.name,
-                '--include-after-body',
-                rss_body.name,
+                '--template',
+                'resources/template.html',
             ]
-        pdoc = pandoc.read(file=str(doc.input_path), format='markdown')
-        pandoc.write(pdoc, file=str(doc.output_path),
-                     format='html5', options=pandoc_options)
-    finally:
-        if rss_body:
-            rss_body.close()
-        if rss_head:
-            rss_head.close()
+        rss_head: Optional[NamedTemporaryFile] = None
+        rss_body: Optional[NamedTemporaryFile] = None
+        try:
+            if link_rss_feed:
+                rss_head = NamedTemporaryFile(mode='w')
+                rss_head.write(
+                    '<link rel="alternate" '
+                    'type="application/rss+xml" '
+                    'title="RSS Feed" '
+                    'href="rss.xml">\n')
+                rss_body = NamedTemporaryFile(mode='w')
+                rss_body.write(
+                    '<div id="rsslink">'
+                    '<a href="rss.xml" '
+                    'title="View RSS Feed" '
+                    'aria-label="View RSS Feed">'
+                    '🛜</a></div> \n')
+                rss_head.flush()
+                rss_body.flush()
+                pandoc_options += [
+                    '--include-in-header',
+                    rss_head.name,
+                    '--include-after-body',
+                    rss_body.name,
+                ]
+            pdoc = pandoc.read(file=str(self.input_path), format='markdown')
+            pandoc.write(pdoc, file=str(self.output_path),
+                         format='html5', options=pandoc_options)
+        finally:
+            if rss_body:
+                rss_body.close()
+            if rss_head:
+                rss_head.close()
 
 
 def write_index_file(
@@ -164,7 +160,7 @@ def convert_dir(
         rss_url_root: Optional[str]):
     documents = get_documents(markdown_dir, output_dir)
     for doc in documents:
-        convert_file(doc)
+        doc.convert()
     write_index_file(index_md_file, documents, title)
     index_md_path = Path(index_md_file.name)
     index_doc = DocumentMetadata(
@@ -173,10 +169,7 @@ def convert_dir(
         title=title,
         pub_date=None,
         summary=None)
-    convert_file(
-        index_doc,
-        use_template=False,
-        link_rss_feed=bool(rss_url_root))
+    index_doc.convert(use_template=False, link_rss_feed=bool(rss_url_root))
     if rss_url_root:
         write_rss_feed(
             documents, output_dir, title, rss_url_root)
