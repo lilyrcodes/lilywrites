@@ -11,9 +11,15 @@ def write_index_file(
         title: str):
     lines: list[str] = ['---', f'title: {title}', '---']
     for doc in documents:
-        lines.append(
-            f'* [{doc.input_path.stem}]'
-            f'(./{doc.output_path.name})')
+        line = (
+            f'**[{doc.input_path.stem}]'
+            f'(./{doc.output_path.name})**'
+        )
+        if doc.summary is not None:
+            line = f'{line} - {doc.summary}  '
+        else:
+            line = f'{line}  '
+        lines.append(line)
     index_md_file.write('\n'.join(lines))
     index_md_file.flush()
 
@@ -33,6 +39,8 @@ def write_rss_feed(
         entry.id(url)
         if doc.title is not None:
             entry.title(doc.title)
+        if doc.summary is not None:
+            entry.description(doc.summary)
         if doc.pub_date is not None:
             entry.pubDate(doc.pub_date)
         entry.link(href=url)
