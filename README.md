@@ -15,7 +15,7 @@ with the `-u` argument, it will also generate an `rss.xml` file.
 The contents of `$output_dir` can then be hosted as a static site.
 
 ```bash
-uv run src/lilywrites/generate.py \
+uv run lilywrites \
     -i $input_dir \
     -o $output_dir \
     -t 'Title to appear on index page' \

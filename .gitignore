@@ -1,2 +1,3 @@
 output/*
 upload.sh
+*.pyc
