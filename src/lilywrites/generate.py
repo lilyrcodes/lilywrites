@@ -16,10 +16,9 @@ def write_index_file(
             f'(./{doc.output_path.name})**'
         )
         if doc.summary is not None:
-            line = f'{line} - {doc.summary}  '
-        else:
-            line = f'{line}  '
+            line = f'{line} - {doc.summary}'
         lines.append(line)
+        lines.append('')
     index_md_file.write('\n'.join(lines))
     index_md_file.flush()
 
